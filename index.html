@@ -10,7 +10,7 @@ const el=id=>document.getElementById(id);
 const KEY="character-chat-v1";
 let data;
 try{data=JSON.parse(localStorage.getItem(KEY)||'{}')}catch{data={}}
-if(!Array.isArray(data.messages))data.messages=[];
+if(!Array.isArray(data.messages))data.messages=[];if(!data.freshChatV9){data.messages=[];data.freshChatV9=true;}
 const obsolete=/AIを読み込んでください|AIを読み込む.*押して|AIが未読み込みです|先に設定から|何かありましたら|何かお手伝い|お知らせください|何をお手伝い|何かありましたら/;
 data.messages=data.messages.filter(m=>!(m.role==="assistant"&&obsolete.test(m.content||"")));
 try{localStorage.setItem(KEY,JSON.stringify(data))}catch{}
@@ -41,7 +41,17 @@ el("retry").addEventListener("click",()=>{initialize().catch(()=>{})});
 el("settingsBtn").addEventListener("click",()=>{el("charName").value=data.name;el("persona").value=data.persona;el("settings").showModal()});
 el("close").addEventListener("click",()=>el("settings").close());el("clearChat").addEventListener("click",()=>{if(!confirm("会話履歴をすべて削除しますか？"))return;data.messages=[];saveData();render();el("settings").close();});
 el("save").addEventListener("click",()=>{data.name=el("charName").value.trim()||"アオ";data.persona=el("persona").value.trim();saveData();el("settings").close()});
-async function send(){const content=el("entry").value.trim();if(!content||working)return;working=true;el("send").disabled=true;el("entry").value="";data.messages.push({role:"user",content});saveData();render();el("busy").textContent="AIが考えています…";try{const model=await initialize();const result=await model.chat.completions.create({messages:[{role:"system",content:"あなたは架空の会話キャラクター「"+data.name+"」です。性格と話し方: "+data.persona+"。相手の直前の発言に具体的に反応し、自然な日本語で1〜3文の短い返事をする。親しみやすく会話を続ける。カスタマーサポートやAIアシスタントのような挨拶・定型文（何かありましたらお知らせください、何をお手伝いできますか等）は絶対に使わない。AIの起動や設定について言及しない。"},...data.messages.slice(-16)],max_tokens:180});data.messages.push({role:"assistant",content:result.choices?.[0]?.message?.content||"返事を生成できませんでした。"});saveData();render();el("busy").textContent="● AI準備完了"}catch(e){el("busy").textContent="エラー: "+(e?.message||e)}finally{working=false;el("send").disabled=false}}
+async function send(){const content=el("entry").value.trim();if(!content||working)return;working=true;el("send").disabled=true;el("entry").value="";data.messages.push({role:"user",content});saveData();render();el("busy").textContent="AIが考えています…";try{const model=await initialize();const examples=[{role:"user",content:"おはよ"},{role:"assistant",content:"おはよー！今日なにする？"},{role:"user",content:"きょーひま？"},{role:"assistant",content:"うん、ひまだよ！どうしたの？"},{role:"user",content:"あのさー"},{role:"assistant",content:"んー？なになに？"},{role:"user",content:"なんで？"},{role:"assistant",content:"え、どのこと？もうちょっと教えて！"}];
+const prompt="あなたは「"+data.name+"」という架空のキャラクター。"+data.persona+"。日本語で友達とLINEするように話す。ユーザーの直前の発言に直接答える。短文なら短く返す。自己紹介、業務案内、サポート案内はしない。";
+const result=await model.chat.completions.create({messages:[{role:"system",content:prompt},...examples,...data.messages.slice(-10)],temperature:0.9,top_p:0.9,repetition_penalty:1.12,max_tokens:120});
+let reply=(result.choices?.[0]?.message?.content||"").trim();
+const canned=/何かありましたら|お知らせください|お手伝い|申し訳ありません|質問に答えることができません|適切な対応を提供/;
+if(!reply||canned.test(reply)){
+const retry=await model.chat.completions.create({messages:[{role:"system",content:prompt+"。返答は一言か二言だけ。会話文だけを出力する。"},...examples.slice(0,6),{role:"user",content}],temperature:1.05,top_p:0.95,max_tokens:90});
+reply=(retry.choices?.[0]?.message?.content||"").trim();
+}
+if(!reply||canned.test(reply))reply="ん、どうした？";
+data.messages.push({role:"assistant",content:reply});saveData();render();el("busy").textContent="● AI準備完了"}catch(e){el("busy").textContent="エラー: "+(e?.message||e)}finally{working=false;el("send").disabled=false}}
 el("send").addEventListener("click",send);
 el("entry").addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();send()}});
 render();
