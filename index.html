@@ -10,7 +10,7 @@ const el=id=>document.getElementById(id);
 const KEY="character-chat-v1";
 let data;
 try{data=JSON.parse(localStorage.getItem(KEY)||'{}')}catch{data={}}
-if(!Array.isArray(data.messages))data.messages=[];if(!data.freshChatV9){data.messages=[];data.freshChatV9=true;}
+if(!Array.isArray(data.messages))data.messages=[];if(!data.upgraded3B){data.messages=[];data.upgraded3B=true;}if(!data.freshChatV9){data.messages=[];data.freshChatV9=true;}
 const obsolete=/AIを読み込んでください|AIを読み込む.*押して|AIが未読み込みです|先に設定から|何かありましたら|何かお手伝い|お知らせください|何をお手伝い|何かありましたら/;
 data.messages=data.messages.filter(m=>!(m.role==="assistant"&&obsolete.test(m.content||"")));
 try{localStorage.setItem(KEY,JSON.stringify(data))}catch{}
@@ -29,8 +29,8 @@ initPromise=(async()=>{
 if(!navigator.gpu)throw Error("WebGPUが利用できません。SafariとiOSの対応状況を確認してください。");
 status("AIライブラリを読み込み中…");
 const lib=await import("https://esm.run/@mlc-ai/web-llm");
-status("新しいAIモデル（Qwen2.5 1.5B）を準備中…");
-const result=await lib.CreateMLCEngine("Qwen2.5-1.5B-Instruct-q4f16_1-MLC",{initProgressCallback:p=>{const progress=typeof p.progress==="number"?p.progress*100:undefined;status(p.text||"AIモデルを読み込み中…",progress)}});
+status("新しいAIモデル（Qwen2.5 3B）を準備中…");
+const result=await lib.CreateMLCEngine("Qwen2.5-3B-Instruct-q4f16_1-MLC",{initProgressCallback:p=>{const progress=typeof p.progress==="number"?p.progress*100:undefined;status(p.text||"AIモデルを読み込み中…",progress)}});
 engine=result;
 el("overlay").hidden=true;el("busy").textContent="● AI準備完了";
 return engine;
@@ -43,7 +43,7 @@ el("close").addEventListener("click",()=>el("settings").close());el("clearChat")
 el("save").addEventListener("click",()=>{data.name=el("charName").value.trim()||"アオ";data.persona=el("persona").value.trim();saveData();el("settings").close()});
 async function send(){const content=el("entry").value.trim();if(!content||working)return;working=true;el("send").disabled=true;el("entry").value="";data.messages.push({role:"user",content});saveData();render();el("busy").textContent="AIが考えています…";try{const model=await initialize();const examples=[{role:"user",content:"おはよ"},{role:"assistant",content:"おはよー！今日なにする？"},{role:"user",content:"きょーひま？"},{role:"assistant",content:"うん、ひまだよ！どうしたの？"},{role:"user",content:"あのさー"},{role:"assistant",content:"んー？なになに？"},{role:"user",content:"なんで？"},{role:"assistant",content:"え、どのこと？もうちょっと教えて！"}];
 const prompt="あなたは「"+data.name+"」という架空のキャラクター。"+data.persona+"。日本語で友達とLINEするように話す。ユーザーの直前の発言に直接答える。短文なら短く返す。自己紹介、業務案内、サポート案内はしない。";
-const result=await model.chat.completions.create({messages:[{role:"system",content:prompt},...examples,...data.messages.slice(-10)],temperature:0.9,top_p:0.9,repetition_penalty:1.12,max_tokens:120});
+const result=await model.chat.completions.create({messages:[{role:"system",content:prompt},...examples,...data.messages.slice(-10)],temperature:0.9,top_p:0.9,repetition_penalty:1.12,temperature:0.7,max_tokens:120});
 let reply=(result.choices?.[0]?.message?.content||"").trim();
 const canned=/何かありましたら|お知らせください|お手伝い|申し訳ありません|質問に答えることができません|適切な対応を提供/;
 if(!reply||canned.test(reply)){
