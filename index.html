@@ -29,8 +29,8 @@ initPromise=(async()=>{
 if(!navigator.gpu)throw Error("WebGPUが利用できません。SafariとiOSの対応状況を確認してください。");
 status("AIライブラリを読み込み中…");
 const lib=await import("https://esm.run/@mlc-ai/web-llm");
-status("AIモデルを準備中…");
-const result=await lib.CreateMLCEngine("Qwen2.5-0.5B-Instruct-q4f16_1-MLC",{initProgressCallback:p=>{const progress=typeof p.progress==="number"?p.progress*100:undefined;status(p.text||"AIモデルを読み込み中…",progress)}});
+status("新しいAIモデル（Qwen2.5 1.5B）を準備中…");
+const result=await lib.CreateMLCEngine("Qwen2.5-1.5B-Instruct-q4f16_1-MLC",{initProgressCallback:p=>{const progress=typeof p.progress==="number"?p.progress*100:undefined;status(p.text||"AIモデルを読み込み中…",progress)}});
 engine=result;
 el("overlay").hidden=true;el("busy").textContent="● AI準備完了";
 return engine;
