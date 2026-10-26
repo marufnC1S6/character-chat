@@ -31,8 +31,21 @@ status("AIライブラリを読み込み中…");
 const lib=await import("https://esm.run/@mlc-ai/web-llm");
 status("新しいAIモデル（Qwen2.5 3B）を準備中…");
 if(!lib.prebuiltAppConfig.model_list.some(m=>m.model_id===MODEL_ID))throw Error("このWebLLMバージョンには3Bモデルが登録されていません");const result=await lib.CreateMLCEngine(MODEL_ID,{initProgressCallback:p=>{const progress=typeof p.progress==="number"?p.progress*100:undefined;status(p.text||"AIモデルを読み込み中…",progress)}});
+status("AIが実際に返答できるか確認中…");
+try{
+ const probe=await result.chat.completions.create({messages:[{role:"user",content:"こんにちは"}],max_tokens:12,temperature:0.2});
+ if(!probe.choices?.[0]?.message?.content)throw Error("テスト応答が空でした");
+}catch(e){
+ const detail=String(e?.message||e);
+ if(/Model not loaded|reload\(model\)/i.test(detail)){
+  status("モデルを再読み込みして確認中…");
+  await result.reload(MODEL_ID);
+  const probe2=await result.chat.completions.create({messages:[{role:"user",content:"こんにちは"}],max_tokens:12});
+  if(!probe2.choices?.[0]?.message?.content)throw Error("再読み込み後もテスト応答が空でした");
+ }else{throw e}
+}
 engine=result;
-el("overlay").hidden=true;el("busy").textContent="● AI準備完了";
+el("overlay").hidden=true;el("busy").textContent="● 会話テスト成功・AI準備完了";
 return engine;
 })();
 try{return await initPromise}catch(e){showError(e);throw e}finally{initPromise=null}
