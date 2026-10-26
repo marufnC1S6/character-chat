@@ -16,7 +16,7 @@ data.messages=data.messages.filter(m=>!(m.role==="assistant"&&obsolete.test(m.co
 try{localStorage.setItem(KEY,JSON.stringify(data))}catch{}
 data.name=data.name||"アオ";
 data.persona=data.persona||"明るく親しみやすい友達のような口調。自然な日本語で会話する。";
-let engine=null,initPromise=null,working=false;
+const MODEL_ID="Qwen2.5-3B-Instruct-q4f16_1-MLC";let engine=null,initPromise=null,working=false;
 function saveData(){try{localStorage.setItem(KEY,JSON.stringify(data))}catch(e){el("busy").textContent="履歴の保存に失敗しました: "+e.message}}
 function render(){el("chat").replaceChildren();for(const m of data.messages){const a=document.createElement("article");a.className=m.role==="user"?"user":"assistant";a.textContent=m.content;el("chat").append(a)}el("chat").scrollTop=el("chat").scrollHeight}
 function status(msg,percent){el("phase").textContent=msg;if(Number.isFinite(percent)){el("progress").value=Math.min(100,Math.max(0,percent))}else{el("progress").removeAttribute("value")}}
@@ -30,7 +30,7 @@ if(!navigator.gpu)throw Error("WebGPUが利用できません。SafariとiOSの�
 status("AIライブラリを読み込み中…");
 const lib=await import("https://esm.run/@mlc-ai/web-llm");
 status("新しいAIモデル（Qwen2.5 3B）を準備中…");
-const result=await lib.CreateMLCEngine("Qwen2.5-3B-Instruct-q4f16_1-MLC",{initProgressCallback:p=>{const progress=typeof p.progress==="number"?p.progress*100:undefined;status(p.text||"AIモデルを読み込み中…",progress)}});
+if(!lib.prebuiltAppConfig.model_list.some(m=>m.model_id===MODEL_ID))throw Error("このWebLLMバージョンには3Bモデルが登録されていません");const result=await lib.CreateMLCEngine(MODEL_ID,{initProgressCallback:p=>{const progress=typeof p.progress==="number"?p.progress*100:undefined;status(p.text||"AIモデルを読み込み中…",progress)}});
 engine=result;
 el("overlay").hidden=true;el("busy").textContent="● AI準備完了";
 return engine;
@@ -41,13 +41,15 @@ el("retry").addEventListener("click",()=>{initialize().catch(()=>{})});
 el("settingsBtn").addEventListener("click",()=>{el("charName").value=data.name;el("persona").value=data.persona;el("settings").showModal()});
 el("close").addEventListener("click",()=>el("settings").close());el("clearChat").addEventListener("click",()=>{if(!confirm("会話履歴をすべて削除しますか？"))return;data.messages=[];saveData();render();el("settings").close();});
 el("save").addEventListener("click",()=>{data.name=el("charName").value.trim()||"アオ";data.persona=el("persona").value.trim();saveData();el("settings").close()});
-async function send(){const content=el("entry").value.trim();if(!content||working)return;working=true;el("send").disabled=true;el("entry").value="";data.messages.push({role:"user",content});saveData();render();el("busy").textContent="AIが考えています…";try{const model=await initialize();const examples=[{role:"user",content:"おはよ"},{role:"assistant",content:"おはよー！今日なにする？"},{role:"user",content:"きょーひま？"},{role:"assistant",content:"うん、ひまだよ！どうしたの？"},{role:"user",content:"あのさー"},{role:"assistant",content:"んー？なになに？"},{role:"user",content:"なんで？"},{role:"assistant",content:"え、どのこと？もうちょっと教えて！"}];
+async function recoverModel(){engine=null;el("busy").textContent="AIモデルを再読み込みしています…";return await initialize()}
+async function completeWithRecovery(messages,options){let model=await initialize();try{return await model.chat.completions.create({messages,...options})}catch(e){if(!/Model not loaded|reload\(model\)|model.*not loaded/i.test(String(e?.message||e)))throw e;model=await recoverModel();return await model.chat.completions.create({messages,...options})}}
+async function send(){const content=el("entry").value.trim();if(!content||working)return;working=true;el("send").disabled=true;el("entry").value="";data.messages.push({role:"user",content});saveData();render();el("busy").textContent="AIが考えています…";try{const examples=[{role:"user",content:"おはよ"},{role:"assistant",content:"おはよー！今日なにする？"},{role:"user",content:"きょーひま？"},{role:"assistant",content:"うん、ひまだよ！どうしたの？"},{role:"user",content:"あのさー"},{role:"assistant",content:"んー？なになに？"},{role:"user",content:"なんで？"},{role:"assistant",content:"え、どのこと？もうちょっと教えて！"}];
 const prompt="あなたは「"+data.name+"」という架空のキャラクター。"+data.persona+"。日本語で友達とLINEするように話す。ユーザーの直前の発言に直接答える。短文なら短く返す。自己紹介、業務案内、サポート案内はしない。";
-const result=await model.chat.completions.create({messages:[{role:"system",content:prompt},...examples,...data.messages.slice(-10)],temperature:0.9,top_p:0.9,repetition_penalty:1.12,temperature:0.7,max_tokens:120});
+const result=await completeWithRecovery([{role:"system",content:prompt},...examples,...data.messages.slice(-10)],{temperature:0.7,top_p:0.9,repetition_penalty:1.12,max_tokens:120});
 let reply=(result.choices?.[0]?.message?.content||"").trim();
 const canned=/何かありましたら|お知らせください|お手伝い|申し訳ありません|質問に答えることができません|適切な対応を提供/;
 if(!reply||canned.test(reply)){
-const retry=await model.chat.completions.create({messages:[{role:"system",content:prompt+"。返答は一言か二言だけ。会話文だけを出力する。"},...examples.slice(0,6),{role:"user",content}],temperature:1.05,top_p:0.95,max_tokens:90});
+const retry=await completeWithRecovery([{role:"system",content:prompt+"。返答は一言か二言だけ。会話文だけを出力する。"},...examples.slice(0,6),{role:"user",content}],{temperature:0.8,top_p:0.95,max_tokens:90});
 reply=(retry.choices?.[0]?.message?.content||"").trim();
 }
 if(!reply||canned.test(reply))reply="ん、どうした？";
